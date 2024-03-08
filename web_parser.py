@@ -6,22 +6,28 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from db import Product, session
 from time import sleep
+
+
+def convert_rubles_to_int(rubles):
+    return rubles.replace(" ", "")[:-1]
 
 
 class Parser:
     def __init__(
-        self, subcategories_per_category_limit, products_per_subcategory_limit
+        self, subcategories_per_category_limit, products_per_subcategory_limit, session
     ):
         self.__driver = None
         self.__categories = []
         self.__categories_links = []
         self.__current_subcategories_links = []
         self.__current_products_links = []
-        self.__data = []
 
         self.__subcategories_per_category_limit = subcategories_per_category_limit
         self.__products_per_subcategory_limit = products_per_subcategory_limit
+
+        self.session = session
 
     def open_website(self, url):
         options = Options()
@@ -43,21 +49,18 @@ class Parser:
 
     def get_product_prices(self):
         price = None
-        price_class = "price-block__old-price"
+        price_class = "price-block__final-price"
         if len(self.__driver.find_elements(By.CLASS_NAME, price_class)) != 0:
-            price = self.__driver.find_element(By.CLASS_NAME, price_class).text
+            price = convert_rubles_to_int(
+                self.__driver.find_element(By.CLASS_NAME, price_class).text
+            )
 
         price_with_discount = None
         wallet_price_class = "price-block__wallet-price"
         if len(self.__driver.find_elements(By.CLASS_NAME, wallet_price_class)) != 0:
-            price_with_discount = self.__driver.find_element(
-                By.CLASS_NAME, wallet_price_class
-            ).text
-        else:
-            another_wallet_price_class = "price-block__final-price"
-            price_with_discount = self.__driver.find_element(
-                By.CLASS_NAME, another_wallet_price_class
-            ).text
+            price_with_discount = convert_rubles_to_int(
+                (self.__driver.find_element(By.CLASS_NAME, wallet_price_class)).text
+            )
 
         if price_with_discount is None:
             price_with_discount = price
@@ -87,8 +90,13 @@ class Parser:
             By.CLASS_NAME, "product-page__btn-detail"
         )
         ActionChains(self.__driver).click(description_button).perform()
-        sleep(0.5)
-        description = self.__driver.find_element(By.CLASS_NAME, "option__text").text
+        sleep(0.25)
+        description = (
+            WebDriverWait(self.__driver, 10)
+            .until(EC.presence_of_element_located((By.CLASS_NAME, "option__text")))
+            .text
+        )
+
         return description
 
     def get_product_characteristics(self):
@@ -108,31 +116,22 @@ class Parser:
         images = self.get_product_images()
         description = self.get_product_description()
         params = self.get_product_characteristics()
+        article = params["Артикул"]
 
         # Save data
-        self.__data.append(
-            {
-                "name": name,
-                "price": price,
-                "price_with_discount": price_with_discount,
-                "path": path,
-                "images": images,
-                "description": description,
-                "params": params,
-            }
+        new_product = Product(
+            name,
+            price,
+            price_with_discount,
+            path,
+            str(images),
+            description,
+            str(params),
+            article,
         )
 
-        print(
-            {
-                "name": name,
-                "price": price,
-                "price_with_discount": price_with_discount,
-                "path": path,
-                "images": images,
-                "description": description,
-                "params": params,
-            }
-        )
+        self.session.add(new_product)
+        self.session.commit()
 
     def get_products_links(self):
         products = self.__driver.find_element(
@@ -171,6 +170,7 @@ class Parser:
             "https://www.wildberries.ru/catalog/zdorove",
             "https://www.wildberries.ru/catalog/aksessuary/tovary-dlya-vzroslyh",
         ]
+        is_age_confirmed = False
         self.get_subcategories_links()
         for subcategory_link in self.__current_subcategories_links:
             self.__driver.get(subcategory_link)
@@ -178,10 +178,14 @@ class Parser:
             if not self.__driver.find_elements(By.CLASS_NAME, "product-card-list"):
                 continue
             self.get_products_links()
-            for product_index, product_link in enumerate(self.__current_products_links):
+            for product_link in self.__current_products_links:
                 self.__driver.get(product_link)
                 sleep(0.25)
-                if product_index == 0 and category_link in restricted_categories_links:
+                if (
+                    category_link in restricted_categories_links
+                    and not is_age_confirmed
+                ):
+                    is_age_confirmed = True
                     self.confirm_age()
                 self.save_product_data()
 
@@ -190,14 +194,14 @@ class Parser:
             By.CLASS_NAME, "nav-element__burger"
         )
         ActionChains(self.__driver).click(navigation_button).perform()
-        sleep(0.5)
-
-        categories_location = self.__driver.find_element(
-            By.CLASS_NAME, "menu-burger__main-list"
+        sleep(0.25)
+        categories_location = WebDriverWait(self.__driver, 5).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "menu-burger__main-list"))
         )
+
         self.__categories = categories_location.find_elements(
             By.CLASS_NAME, "menu-burger__main-list-item--subcategory"
-        )[7:]
+        )
 
     def get_categories_links(self):
         categories_links = []
@@ -214,14 +218,11 @@ class Parser:
         self.__categories_links = categories_links
 
     def confirm_age(self):
-        if len(self.__driver.find_elements(By.CLASS_NAME, "popup-confirm-age")) != 0:
-            popup_window = self.__driver.find_element(
-                By.CLASS_NAME, "popup-confirm-age"
-            )
-            ActionChains(self.__driver).click(
-                popup_window.find_element(By.TAG_NAME, "button")
-            ).perform()
-            sleep(0.25)
+        popup_window = self.__driver.find_element(By.CLASS_NAME, "popup-confirm-age")
+        ActionChains(self.__driver).click(
+            popup_window.find_element(By.TAG_NAME, "button")
+        ).perform()
+        sleep(0.25)
 
     def parse_categories(self):
         self.get_product_categories()
@@ -238,16 +239,16 @@ class Parser:
 
 
 def main():
-    parser = Parser(3, 3)
+    parser = Parser(3, 4, session)
     parser.open_website("https://www.wildberries.ru/")
     parser.parse_categories()
-    data = parser.get_data()
-    print(data)
-    print(len(data))
 
 
 if __name__ == "__main__":
     main()
 
 print("telephon")
-print(" See remote debugger for selenium")
+
+"""
+git dev branch
+"""

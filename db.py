@@ -1,14 +1,12 @@
 from sqlalchemy import (
-    create_engine,
-    ForeignKey,
     Column,
     String,
     Integer,
-    CHAR,
-    PickleType,
 )
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 
 Base = declarative_base()
 
@@ -16,16 +14,25 @@ Base = declarative_base()
 class Product(Base):
     __tablename__ = "products"
 
-    name = Column("name", String)
-    price = Column("price", Integer)
-    discounted_price = Column("discounted_price", Integer)
-    path = Column("Путь", String)
-    images = Column("Фото", PickleType)
-    description = Column("Описание", String)
-    characteristics = Column(PickleType)
+    name = Column(String)
+    price = Column(Integer)
+    discounted_price = Column(Integer)
+    path = Column(String)
+    images = Column(String)
+    description = Column(String)
+    characteristics = Column(String)
+    article = Column(Integer, primary_key=True)
 
     def __init__(
-        self, name, price, discounted_price, path, images, description, characteristics
+        self,
+        name,
+        price,
+        discounted_price,
+        path,
+        images,
+        description,
+        characteristics,
+        article,
     ):
         self.name = name
         self.price = price
@@ -34,10 +41,10 @@ class Product(Base):
         self.images = images
         self.description = description
         self.characteristics = characteristics
+        self.article = article
 
 
-# engine = create_engine("sqlite:///products.db", echo=True)
-# Base.metadata.create_all(bind=engine)
-
-# Session = sessionmaker(bind=engine)
-# session = Session()
+engine = create_engine("sqlite:///products.db", echo=True)
+Base.metadata.create_all(bind=engine)
+Session = sessionmaker(bind=engine)
+session = Session()
