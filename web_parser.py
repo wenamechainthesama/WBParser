@@ -6,6 +6,7 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from sqlalchemy import exists
 from db import Product
 from time import sleep
 
@@ -118,7 +119,6 @@ class Parser:
         params = self.get_product_characteristics()
         article = params["Артикул"]
 
-        # Save data
         new_product = Product(
             name,
             price,
@@ -130,8 +130,13 @@ class Parser:
             article,
         )
 
-        self.session.add(new_product)
-        self.session.commit()
+        is_product_already_in_db = self.session.query(
+            exists().where(Product.article == article)
+        ).scalar()
+
+        if not is_product_already_in_db:
+            self.session.add(new_product)
+            self.session.commit()
 
     def get_products_links(self):
         products = self.__driver.find_element(
