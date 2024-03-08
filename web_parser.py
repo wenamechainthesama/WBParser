@@ -6,7 +6,7 @@ from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from db import Product, session
+from db import Product
 from time import sleep
 
 
@@ -233,22 +233,3 @@ class Parser:
             self.parse_subcategories(category_link)
 
         self.__driver.quit()
-
-    def get_data(self):
-        return self.__data
-
-
-def main():
-    parser = Parser(3, 4, session)
-    parser.open_website("https://www.wildberries.ru/")
-    parser.parse_categories()
-
-
-if __name__ == "__main__":
-    main()
-
-print("telephon")
-
-"""
-git dev branch
-"""
