@@ -2,3 +2,4 @@ venv/
 __pycache__/
 products.xlsx
 products.db
+products_stats.txt

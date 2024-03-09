@@ -8,5 +8,3 @@ def create_xlsx_from_db():
     query = "SELECT * FROM products"
     df = read_sql(query, connection)
     df.to_excel("products.xlsx")
-
-create_xlsx_from_db()
