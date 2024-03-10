@@ -1,12 +1,11 @@
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
 from sqlalchemy import (
     Column,
     String,
     Integer,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
 
 Base = declarative_base()
 
@@ -44,7 +43,7 @@ class Product(Base):
         self.article = article
 
 
-engine = create_engine("sqlite:///products.db", echo=True)
+engine = create_engine("sqlite:///products.db")
 Base.metadata.create_all(bind=engine)
 Session = sessionmaker(bind=engine)
 session = Session()
