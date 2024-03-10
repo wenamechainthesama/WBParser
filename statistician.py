@@ -1,6 +1,7 @@
 from pandas import read_excel
 from os.path import dirname
 from statistics import median, mean
+from loguru import logger
 
 
 def calculate_statistics():
@@ -17,6 +18,7 @@ def calculate_statistics():
                 f"Average price without discount: {price_without_discount}\n",
                 f"Average price with dicount: {discounted_price}\n",
                 f"Average images' amount: {images_quantity}\n",
-                f"Average description length: {description_lenth}",
+                f"Average description length: {description_lenth}\n",
             ]
         )
+    logger.success("Statistics is done")

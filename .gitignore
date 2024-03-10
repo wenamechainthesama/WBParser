@@ -3,3 +3,4 @@ __pycache__/
 products.xlsx
 products.db
 products_stats.txt
+debug.log

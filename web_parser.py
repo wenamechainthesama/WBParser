@@ -9,6 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from sqlalchemy import exists
 from db import Product
 from time import sleep
+from loguru import logger
 
 
 def convert_rubles_to_int(rubles):
@@ -37,6 +38,7 @@ class Parser:
             service=Service(ChromeDriverManager().install()), options=options
         )
         self.__driver.get(url)
+        logger.success("Website successfully opened")
         sleep(0.5)
 
     def get_product_name(self):
@@ -137,13 +139,16 @@ class Parser:
         if not is_product_already_in_db:
             self.session.add(new_product)
             self.session.commit()
+            logger.success(f"Data of product ({article}) successfully added to DB")
+            return True
+
+        logger.warning("Current product had already been added to DB")
+        return False
 
     def get_products_links(self):
         products = self.__driver.find_element(
             By.CLASS_NAME, "product-card-list"
-        ).find_elements(By.CLASS_NAME, "product-card")[
-            : self.__products_per_subcategory_limit
-        ]
+        ).find_elements(By.CLASS_NAME, "product-card")
 
         products_links = []
         for product in products:
@@ -162,9 +167,7 @@ class Parser:
                 list(
                     filter(
                         lambda subcategory: not subcategory.text.startswith("Подарки"),
-                        subcategories_location.find_elements(By.TAG_NAME, "a")[
-                            : self.__subcategories_per_category_limit
-                        ],
+                        subcategories_location.find_elements(By.TAG_NAME, "a"),
                     )
                 ),
             )
@@ -175,24 +178,40 @@ class Parser:
             "https://www.wildberries.ru/catalog/zdorove",
             "https://www.wildberries.ru/catalog/aksessuary/tovary-dlya-vzroslyh",
         ]
+        restricted_subcategories_links = [
+            "https://www.wildberries.ru/catalog/dom/dlya-kureniya",
+        ]
         is_age_confirmed = False
         self.get_subcategories_links()
+        non_empty_subcategories = 0
         for subcategory_link in self.__current_subcategories_links:
+            if non_empty_subcategories == self.__subcategories_per_category_limit + 1:
+                break
             self.__driver.get(subcategory_link)
             sleep(0.25)
             if not self.__driver.find_elements(By.CLASS_NAME, "product-card-list"):
+                logger.warning(
+                    f"This subcategory {subcategory_link} is another subcategory and isn't gonna be parsed"
+                )
                 continue
+            logger.info(f"This subcategory {subcategory_link} is now being parsed")
+            non_empty_subcategories += 1
             self.get_products_links()
+            unique_products_counter = 0
             for product_link in self.__current_products_links:
+                if unique_products_counter == self.__products_per_subcategory_limit:
+                    break
                 self.__driver.get(product_link)
                 sleep(0.25)
                 if (
                     category_link in restricted_categories_links
-                    and not is_age_confirmed
-                ):
+                    or subcategory_link in restricted_subcategories_links
+                ) and not is_age_confirmed:
                     is_age_confirmed = True
                     self.confirm_age()
-                self.save_product_data()
+                save_succeded = self.save_product_data()
+                if save_succeded:
+                    unique_products_counter += 1
 
     def get_product_categories(self):
         navigation_button = self.__driver.find_element(
@@ -223,10 +242,13 @@ class Parser:
         self.__categories_links = categories_links
 
     def confirm_age(self):
-        popup_window = self.__driver.find_element(By.CLASS_NAME, "popup-confirm-age")
+        popup_window = WebDriverWait(self.__driver, 10).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "popup-confirm-age"))
+        )
         ActionChains(self.__driver).click(
             popup_window.find_element(By.TAG_NAME, "button")
         ).perform()
+        logger.success("Age has been confirmed")
         sleep(0.25)
 
     def parse_categories(self):
@@ -234,7 +256,9 @@ class Parser:
         self.get_categories_links()
         for category_link in self.__categories_links:
             self.__driver.get(category_link)
+            logger.info(f"This category {category_link} is now being parsed")
             sleep(0.25)
             self.parse_subcategories(category_link)
 
         self.__driver.quit()
+        logger.success("Parsing has finished")

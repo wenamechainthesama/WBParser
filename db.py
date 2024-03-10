@@ -43,7 +43,7 @@ class Product(Base):
         self.article = article
 
 
-engine = create_engine("sqlite:///products.db", echo=True)
+engine = create_engine("sqlite:///products.db")
 Base.metadata.create_all(bind=engine)
 Session = sessionmaker(bind=engine)
 session = Session()
